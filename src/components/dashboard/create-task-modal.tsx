@@ -27,7 +27,7 @@ import { toast } from "sonner";
 export function CreateTaskModal() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [users, setUsers] = useState<{id: string, name: string, email: string}[]>([]);
+  const [users, setUsers] = useState<{ id: string, name: string, email: string }[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export function CreateTaskModal() {
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-    
+
     const formData = new FormData(e.currentTarget);
     const title = formData.get("title") as string;
     const assigneeId = formData.get("assigneeId") as string;
@@ -62,7 +62,7 @@ export function CreateTaskModal() {
       toast.success("Task created");
       setOpen(false);
       router.refresh();
-    } catch (err) {
+    } catch {
       toast.error("Failed to create task");
     } finally {
       setLoading(false);
@@ -90,7 +90,7 @@ export function CreateTaskModal() {
               <Label htmlFor="title">Task title</Label>
               <Input id="title" name="title" placeholder="What needs to be done?" required autoFocus />
             </div>
-            
+
             <div className="grid gap-2">
               <Label htmlFor="assigneeId">Assignee</Label>
               <Select name="assigneeId" required>
@@ -122,7 +122,7 @@ export function CreateTaskModal() {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="grid gap-2">
                 <Label htmlFor="dueDate">Due Date (Optional)</Label>
                 <Input id="dueDate" name="dueDate" type="date" />

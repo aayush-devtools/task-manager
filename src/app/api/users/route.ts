@@ -11,6 +11,9 @@ export async function GET() {
 
   try {
     const users = await prisma.user.findMany({
+      where: {
+        teamId: session.user.teamId || undefined
+      },
       select: {
         id: true,
         name: true,

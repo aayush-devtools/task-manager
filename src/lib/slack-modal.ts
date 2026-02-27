@@ -38,6 +38,25 @@ export function buildTaskModal(initialTitle?: string, slackLink?: string, channe
       },
       {
         type: "input",
+        block_id: "description_block",
+        optional: true,
+        element: {
+          type: "plain_text_input",
+          action_id: "description_input",
+          multiline: true,
+          placeholder: {
+            type: "plain_text",
+            text: "Add some details (optional)",
+          },
+        },
+        label: {
+          type: "plain_text",
+          text: "Description",
+          emoji: true,
+        },
+      },
+      {
+        type: "input",
         block_id: "assignee_block",
         element: {
           type: "users_select",

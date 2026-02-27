@@ -36,20 +36,20 @@ export async function POST(req: NextRequest) {
           avatarUrl = lookupRes.user.profile?.image_512 || lookupRes.user.profile?.image_192 || null;
           console.log(`Matched user ${email} to Slack ID ${slackId}`);
         }
-      } catch (err: any) {
-        console.log(`Could not find Slack user for ${email}: ${err.message}`);
+      } catch (err: unknown) {
+        console.log(`Could not find Slack user for ${email}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
     // Create user
     // We do an upsert in case the slackId is already in the DB from a previous interaction
     let user;
-    
+
     if (slackId) {
       const existingSlackUser = await prisma.user.findUnique({
         where: { slackId }
       });
-      
+
       if (existingSlackUser) {
         user = await prisma.user.update({
           where: { slackId },
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ message: "User registered successfully", user: { id: user.id, email: user.email } }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Registration error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

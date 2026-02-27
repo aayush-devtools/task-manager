@@ -7,11 +7,12 @@ import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-async function getTasks(userId: string): Promise<Task[]> {
+async function getTasks(userId: string, teamId: string | undefined): Promise<Task[]> {
   const tasks = await prisma.task.findMany({
-    where: { 
+    where: {
       status: "TODO",
-      assigneeId: userId
+      assigneeId: userId,
+      teamId,
     },
     include: { assignee: true },
     orderBy: { createdAt: "desc" },
@@ -20,6 +21,7 @@ async function getTasks(userId: string): Promise<Task[]> {
   return tasks.map(t => ({
     id: t.id,
     title: t.title,
+    description: t.description,
     status: t.status,
     priority: t.priority,
     dueDate: t.dueDate,
@@ -31,7 +33,7 @@ async function getTasks(userId: string): Promise<Task[]> {
 
 export default async function InboxPage() {
   const session = await getServerSession(authOptions);
-  const tasks = session?.user?.id ? await getTasks(session.user.id) : [];
+  const tasks = session?.user?.id ? await getTasks(session.user.id, session.user.teamId || undefined) : [];
 
   return (
     <div className="flex flex-col gap-6">

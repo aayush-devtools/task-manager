@@ -1,30 +1,31 @@
 "use client";
 
 import { TaskItem, Task } from "./task-item";
-import { completeTaskAction } from "@/app/actions/task";
-import { useOptimistic, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 
 export function TaskList({ initialTasks }: { initialTasks: Task[] }) {
-  const [, startTransition] = useTransition();
-  const [optimisticTasks, setOptimisticTasks] = useOptimistic(
-    initialTasks,
-    (state, taskId: string) => state.filter((t) => t.id !== taskId)
-  );
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
 
-  const handleComplete = (taskId: string) => {
+  const handleToggle = (taskId: string, newStatus: string) => {
     startTransition(async () => {
-      setOptimisticTasks(taskId);
-      await completeTaskAction(taskId);
+      await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      router.refresh();
     });
   };
 
   return (
-    <div className="flex flex-col">
-      {optimisticTasks.map((task) => (
+    <div className={`flex flex-col ${isPending ? "opacity-70 pointer-events-none" : ""}`}>
+      {initialTasks.map((task) => (
         <TaskItem
           key={task.id}
           task={task}
-          onComplete={handleComplete}
+          onToggle={(status) => handleToggle(task.id, status)}
         />
       ))}
     </div>

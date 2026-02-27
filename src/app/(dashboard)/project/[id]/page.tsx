@@ -7,11 +7,14 @@ import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-async function getTasks(projectId: string): Promise<Task[]> {
+async function getTasks(projectId: string, teamId: string | undefined): Promise<Task[]> {
+  // If no teamId is connected to the session, we should not leak tasks
+  if (!teamId) return [];
+
   const tasks = await prisma.task.findMany({
-    where: { 
-      status: "TODO",
-      projectId: projectId === "slack-tasks" ? undefined : projectId,
+    where: {
+      projectId: projectId === "slack-tasks" ? null : projectId,
+      teamId,
     },
     include: { assignee: true },
     orderBy: { createdAt: "desc" },
@@ -20,6 +23,7 @@ async function getTasks(projectId: string): Promise<Task[]> {
   return tasks.map(t => ({
     id: t.id,
     title: t.title,
+    description: t.description,
     status: t.status,
     priority: t.priority,
     dueDate: t.dueDate,
@@ -29,12 +33,15 @@ async function getTasks(projectId: string): Promise<Task[]> {
   }));
 }
 
-export default async function ProjectPage({ params }: { params: { id: string } }) {
+export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getServerSession(authOptions);
-  
+
   // Right now, 'slack-tasks' is a pseudo-project for all tasks not strictly assigned a project ID
-  const tasks = session?.user?.id ? await getTasks(id) : [];
+  const tasks = session?.user?.id ? await getTasks(id, session.user.teamId || undefined) : [];
+
+  const todoTasks = tasks.filter((t) => t.status === "TODO");
+  const doneTasks = tasks.filter((t) => t.status === "DONE");
 
   const projectName = id === "slack-tasks" ? "Slack Tasks" : "Project " + id;
 
@@ -45,21 +52,35 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         <p className="text-sm text-muted-foreground">Tasks for this project</p>
       </header>
 
-      <div className="flex flex-col">
-        {tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground/40">
-              <Hash className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">No tasks in this project</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Tasks created in related channels will appear here.
-              </p>
-            </div>
+      <div className="flex flex-col gap-8">
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">To Do <span className="text-muted-foreground text-sm font-normal items-center ml-2 border rounded-full px-2 py-0.5 bg-muted/50">{todoTasks.length}</span></h2>
           </div>
-        ) : (
-          <TaskList initialTasks={tasks} />
+          {todoTasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center border rounded-lg bg-card border-dashed">
+              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground/40">
+                <Hash className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">No pending tasks</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Tasks created in related channels will appear here.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <TaskList initialTasks={todoTasks} />
+          )}
+        </section>
+
+        {doneTasks.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Completed <span className="text-muted-foreground text-sm font-normal items-center ml-2 border rounded-full px-2 py-0.5 bg-muted/50">{doneTasks.length}</span></h2>
+            </div>
+            <TaskList initialTasks={doneTasks} />
+          </section>
         )}
       </div>
     </div>

@@ -7,6 +7,7 @@ import { format } from "date-fns";
 export interface Task {
   id: string;
   title: string;
+  description?: string | null;
   status: string;
   priority: string;
   dueDate: Date | null;
@@ -17,7 +18,7 @@ export interface Task {
 
 interface TaskItemProps {
   task: Task;
-  onComplete: (id: string) => void;
+  onToggle: (status: string) => void;
 }
 
 const priorityBorderColors = {
@@ -27,13 +28,13 @@ const priorityBorderColors = {
   p4: "border-gray-400",
 };
 
-export function TaskItem({ task, onComplete }: TaskItemProps) {
+export function TaskItem({ task, onToggle }: TaskItemProps) {
   const isDone = task.status === "DONE";
 
   return (
     <div className="group flex items-start gap-3 border-b border-border py-3 px-1 hover:bg-muted/30 transition-colors">
       <button
-        onClick={() => onComplete(task.id)}
+        onClick={() => onToggle(isDone ? "TODO" : "DONE")}
         className={cn(
           "mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-all hover:bg-muted/80",
           priorityBorderColors[task.priority as keyof typeof priorityBorderColors] || "border-gray-400",
@@ -57,6 +58,15 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
           </p>
         </div>
 
+        {task.description && (
+          <p className={cn(
+            "text-xs text-muted-foreground mt-0.5 line-clamp-2",
+            isDone && "line-through decoration-muted-foreground/50 opacity-70"
+          )}>
+            {task.description}
+          </p>
+        )}
+
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           {task.dueDate && (
             <div className="flex items-center gap-1 text-green-600 font-medium">
@@ -64,7 +74,7 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
               {format(task.dueDate, "MMM d")}
             </div>
           )}
-          
+
           <div className="flex items-center gap-1">
             <User className="h-3 w-3" />
             {task.assigneeName || "Unassigned"}

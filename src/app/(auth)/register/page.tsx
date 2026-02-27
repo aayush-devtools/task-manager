@@ -15,7 +15,7 @@ export default function RegisterPage() {
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-    
+
     const formData = new FormData(e.currentTarget);
     const name = formData.get("name") as string;
     const email = formData.get("email") as string;
@@ -35,8 +35,8 @@ export default function RegisterPage() {
 
       toast.success("Account created successfully. Please sign in.");
       router.push("/login");
-    } catch (err: any) {
-      toast.error(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -76,10 +76,10 @@ export default function RegisterPage() {
             <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
           </div>
         </div>
-        
-        <Button 
-          variant="outline" 
-          type="button" 
+
+        <Button
+          variant="outline"
+          type="button"
           className="w-full"
           onClick={() => {
             import("next-auth/react").then(({ signIn }) => signIn("google", { callbackUrl: "/" }))
