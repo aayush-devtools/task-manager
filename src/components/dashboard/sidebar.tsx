@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { 
   Inbox, 
   Calendar, 
@@ -9,9 +10,11 @@ import {
   Hash, 
   Plus, 
   Settings,
-  Bell
+  Bell,
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const navItems = [
   { name: "Inbox", icon: Inbox, color: "text-blue-500", href: "/" },
@@ -19,7 +22,7 @@ const navItems = [
   { name: "Upcoming", icon: CalendarDays, color: "text-purple-500", href: "/upcoming" },
 ];
 
-export function Sidebar() {
+export function Sidebar({ user }: { user: any }) {
   const pathname = usePathname();
 
   return (
@@ -57,7 +60,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="mt-8">
+      <div className="mt-8 flex-1">
         <div className="flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground group">
           <span>Projects</span>
           <button className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded transition-opacity">
@@ -72,6 +75,26 @@ export function Sidebar() {
             <Hash className="h-4 w-4 text-muted-foreground/60" />
             Slack Tasks
           </Link>
+        </div>
+      </div>
+
+      <div className="mt-auto border-t pt-4 px-2">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={user.image} alt={user.name} />
+            <AvatarFallback>{user.name?.[0]}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 overflow-hidden">
+            <p className="truncate text-sm font-medium leading-none">{user.name}</p>
+            <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+          </div>
+          <button
+            onClick={() => signOut()}
+            className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>
