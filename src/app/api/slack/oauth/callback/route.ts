@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WebClient } from '@slack/web-api';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -52,10 +50,12 @@ export async function GET(req: NextRequest) {
     } else {
       return NextResponse.json({ error: response.error }, { status: 500 });
     }
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
+  } catch (error: any) {
+    console.error("Slack OAuth Exception:", error);
+    return NextResponse.json({
+      error: 'Server error',
+      message: error?.message || String(error),
+      data: error?.data || null
+    }, { status: 500 });
   }
 }
