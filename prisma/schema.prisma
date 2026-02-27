@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  slackId       String   @unique
+  name          String
+  avatarUrl     String?
+  tasksAssigned Task[]   @relation("AssignedTasks")
+  tasksCreated  Task[]   @relation("CreatedTasks")
+}
+
+model Project {
+  id             String   @id @default(cuid())
+  name           String
+  slackChannelId String?
+  tasks          Task[]
+}
+
+model Task {
+  id             String    @id @default(cuid())
+  title          String
+  description    String?
+  status         String    @default("TODO") // TODO, DONE
+  priority       String    @default("p4")   // p1, p2, p3, p4
+  dueDate        DateTime?
+  
+  // Relationships
+  assigneeId     String
+  assignee       User      @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  creatorId      String
+  creator        User      @relation("CreatedTasks", fields: [creatorId], references: [id])
+  projectId      String?
+  project        Project?  @relation(fields: [projectId], references: [id])
+
+  // Slack Context
+  slackChannelId String?
+  slackThreadTs  String?
+  slackMessageTs String?
+  slackPermalink String?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
