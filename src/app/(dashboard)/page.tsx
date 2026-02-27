@@ -8,13 +8,14 @@ import { authOptions } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 async function getTasks(userId: string, teamIds: string[]): Promise<Task[]> {
-  if (teamIds.length === 0) return [];
-
   const tasks = await prisma.task.findMany({
     where: {
       status: "TODO",
       assigneeId: userId,
-      teamId: { in: teamIds },
+      OR: [
+        ...(teamIds.length > 0 ? [{ teamId: { in: teamIds } }] : []),
+        { teamId: null }
+      ]
     },
     include: { assignee: true },
     orderBy: { createdAt: "desc" },

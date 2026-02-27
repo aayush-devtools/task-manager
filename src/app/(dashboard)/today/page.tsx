@@ -8,8 +8,6 @@ import { authOptions } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 async function getTasks(userId: string, teamIds: string[]): Promise<Task[]> {
-  if (teamIds.length === 0) return [];
-
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
@@ -20,7 +18,10 @@ async function getTasks(userId: string, teamIds: string[]): Promise<Task[]> {
     where: {
       status: "TODO",
       assigneeId: userId,
-      teamId: { in: teamIds },
+      OR: [
+        ...(teamIds.length > 0 ? [{ teamId: { in: teamIds } }] : []),
+        { teamId: null }
+      ],
       dueDate: {
         gte: startOfDay,
         lte: endOfDay
