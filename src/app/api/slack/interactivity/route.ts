@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { verifySlackSignature } from "@/lib/slack-verify";
 import { buildTaskModal } from "@/lib/slack-modal";
 import { openModal, getUserInfo, getPermalink, postMessage, respondToUrl } from "@/lib/slack-client";
@@ -213,6 +214,9 @@ export async function POST(req: NextRequest) {
       } else if (privateMetadata.channelId) {
         await postMessage(privateMetadata.channelId, confirmationText).catch(e => console.error("Confirmation postMessage failed:", e));
       }
+
+      // Revalidate the dashboard page so the new task appears immediately
+      revalidatePath("/");
 
       return NextResponse.json({
         response_action: "clear",

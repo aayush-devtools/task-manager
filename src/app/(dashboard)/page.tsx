@@ -3,6 +3,8 @@ import { TaskList } from "@/components/dashboard/task-list";
 import { Inbox } from "lucide-react";
 import { Task } from "@/components/dashboard/task-item";
 
+export const dynamic = "force-dynamic";
+
 async function getTasks(): Promise<Task[]> {
   const tasks = await prisma.task.findMany({
     where: { status: "TODO" },
