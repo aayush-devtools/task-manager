@@ -7,17 +7,20 @@ import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-async function getTasks(userId: string): Promise<Task[]> {
+async function getTasks(userId: string, teamIds: string[]): Promise<Task[]> {
+  if (teamIds.length === 0) return [];
+
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
-  
+
   const endOfDay = new Date();
   endOfDay.setHours(23, 59, 59, 999);
 
   const tasks = await prisma.task.findMany({
-    where: { 
+    where: {
       status: "TODO",
       assigneeId: userId,
+      teamId: { in: teamIds },
       dueDate: {
         gte: startOfDay,
         lte: endOfDay
@@ -41,7 +44,10 @@ async function getTasks(userId: string): Promise<Task[]> {
 
 export default async function TodayPage() {
   const session = await getServerSession(authOptions);
-  const tasks = session?.user?.id ? await getTasks(session.user.id) : [];
+  // Support either single teamId or array of teamIds captured from JWT
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const activeTeams = (session?.user as any)?.teamIds || (session?.user?.teamId ? [session.user.teamId] : []);
+  const tasks = session?.user?.id ? await getTasks(session.user.id, activeTeams) : [];
 
   return (
     <div className="flex flex-col gap-6">

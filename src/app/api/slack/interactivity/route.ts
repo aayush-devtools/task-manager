@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       try {
         // Fetch last 10 tasks from DB
         const tasks = await prisma.task.findMany({
-          where: { teamId: teamId || undefined },
+          where: { teamId: teamId || "__NONE__" },
           take: 10,
           orderBy: { createdAt: "desc" },
           include: { assignee: true },
