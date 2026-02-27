@@ -1,7 +1,7 @@
 export async function slackPost(method: string, body: Record<string, unknown>, botToken?: string) {
   const token = botToken || process.env.SLACK_BOT_TOKEN;
   if (!token) {
-    throw new Error("SLACK_BOT_TOKEN is not set");
+    throw new Error("SLACK_BOT_TOKEN or botToken argument is missing");
   }
 
   const response = await fetch(`https://slack.com/api/${method}`, {
