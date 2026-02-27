@@ -26,10 +26,12 @@ const installStore = {
 const receiver = new ExpressReceiver({
     signingSecret: process.env.SLACK_SIGNING_SECRET || '',
     endpoints: '/api/slack/events', // Mount this in your Next.js app
+    clientId: process.env.SLACK_CLIENT_ID,
+    clientSecret: process.env.SLACK_CLIENT_SECRET,
+    stateSecret: 'your-state-secret', // For security
     installerOptions: {
         installPath: '/api/slack/install', // Optional separate install route if needed
-        redirectUri: 'https://task-manager-fawn-delta.vercel.app/api/slack/oauth/callback',
-        stateSecret: 'your-state-secret', // For security
+        redirectUriPath: '/api/slack/oauth/callback',
     },
     // @ts-ignore
     installationStore: installStore,

@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     if (response.ok) {
       // Store the installation in DB (see schema changes below)
       await prisma.slackInstallation.upsert({
-        where: { teamId: response.team!.id },
+        where: { teamId: response.team!.id as string },
         update: {
           teamName: response.team!.name,
           botToken: response.access_token!,
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
           botUserId: response.bot_user_id,
         },
         create: {
-          teamId: response.team!.id,
+          teamId: response.team!.id as string,
           teamName: response.team!.name,
           botToken: response.access_token!,
           botId: response.bot_user_id,
