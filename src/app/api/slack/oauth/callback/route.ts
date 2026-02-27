@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
     } else {
       return NextResponse.json({ error: response.error }, { status: 500 });
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error("Slack OAuth Exception:", error);
     return NextResponse.json({

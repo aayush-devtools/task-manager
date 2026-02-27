@@ -42,6 +42,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           image: user.avatarUrl,
           teamId: user.teamId,
+          teamIds: user.teamId ? [user.teamId] : [],
         };
       }
     })
@@ -120,34 +121,62 @@ export const authOptions: NextAuthOptions = {
           }
         }
 
+        // Gather multiple workspaces if the user exists in multiple
+        const teamIds: string[] = dbUser?.teamId ? [dbUser.teamId] : [];
+        if (user.email) {
+          const installations = await prisma.slackInstallation.findMany();
+          for (const install of installations) {
+            if (teamIds.includes(install.teamId)) continue;
+            try {
+              const slackClient = new WebClient(install.botToken);
+              const lookupRes = await slackClient.users.lookupByEmail({ email: user.email as string });
+              if (lookupRes.ok && lookupRes.user?.id) {
+                teamIds.push(install.teamId);
+              }
+            } catch { }
+          }
+        }
+
         // Update user id to be our DB id, so the JWT token gets the right id
         if (dbUser) {
           user.id = dbUser.id;
           user.teamId = dbUser.teamId;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (user as any).teamIds = teamIds;
+        } else {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (user as any).teamIds = teamIds;
+          user.teamId = teamIds[0] || null;
         }
+
         return true;
       }
       return true;
     },
-    async session({ session, token }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async session({ session, token }: { session: any, token: any }) {
       if (session.user && token.sub) {
         session.user.id = token.sub;
         session.user.teamId = token.teamId;
+        session.user.teamIds = token.teamIds || (token.teamId ? [token.teamId] : []);
       }
       return session;
     },
-    async jwt({ token, user }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async jwt({ token, user }: { token: any, user: any }) {
       if (user) {
         token.sub = user.id;
         token.teamId = user.teamId;
+        token.teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
       }
-      if (token.email) {
+      if (token.email && !token.teamIds) {
         const dbUser = await prisma.user.findUnique({
           where: { email: token.email }
         });
         if (dbUser) {
           token.sub = dbUser.id;
           token.teamId = dbUser.teamId;
+          token.teamIds = dbUser.teamId ? [dbUser.teamId] : [];
         }
       }
       return token;

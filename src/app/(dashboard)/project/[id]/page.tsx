@@ -7,14 +7,14 @@ import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-async function getTasks(projectId: string, teamId: string | undefined): Promise<Task[]> {
+async function getTasks(projectId: string, teamIds: string[]): Promise<Task[]> {
   // If no teamId is connected to the session, we should not leak tasks
-  if (!teamId) return [];
+  if (!teamIds || teamIds.length === 0) return [];
 
   const tasks = await prisma.task.findMany({
     where: {
       projectId: projectId === "slack-tasks" ? null : projectId,
-      teamId,
+      teamId: { in: teamIds },
     },
     include: { assignee: true },
     orderBy: { createdAt: "desc" },
@@ -38,7 +38,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const session = await getServerSession(authOptions);
 
   // Right now, 'slack-tasks' is a pseudo-project for all tasks not strictly assigned a project ID
-  const tasks = session?.user?.id ? await getTasks(id, session.user.teamId || undefined) : [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const activeTeams = (session?.user as any)?.teamIds || (session?.user?.teamId ? [session.user.teamId] : []);
+  const tasks = session?.user?.id ? await getTasks(id, activeTeams) : [];
 
   const todoTasks = tasks.filter((t) => t.status === "TODO");
   const doneTasks = tasks.filter((t) => t.status === "DONE");
