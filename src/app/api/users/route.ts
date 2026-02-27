@@ -10,10 +10,13 @@ export async function GET() {
   }
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const activeTeams = (session?.user as any)?.teamIds || (session?.user?.teamId ? [session.user.teamId] : []);
+
     const users = await prisma.user.findMany({
-      where: {
-        teamId: session.user.teamId || undefined
-      },
+      where: activeTeams.length > 0 ? {
+        teamId: { in: activeTeams }
+      } : undefined,
       select: {
         id: true,
         name: true,
