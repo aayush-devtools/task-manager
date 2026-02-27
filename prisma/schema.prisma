@@ -11,38 +11,38 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  slackId       String?  @unique
-  email         String?  @unique
+  id            String  @id @default(cuid())
+  slackId       String? @unique
+  email         String? @unique
   password      String?
   name          String
   avatarUrl     String?
-  tasksAssigned Task[]   @relation("AssignedTasks")
-  tasksCreated  Task[]   @relation("CreatedTasks")
+  tasksAssigned Task[]  @relation("AssignedTasks")
+  tasksCreated  Task[]  @relation("CreatedTasks")
 }
 
 model Project {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   name           String
   slackChannelId String?
   tasks          Task[]
 }
 
 model Task {
-  id             String    @id @default(cuid())
-  title          String
-  description    String?
-  status         String    @default("TODO") // TODO, DONE
-  priority       String    @default("p4")   // p1, p2, p3, p4
-  dueDate        DateTime?
-  
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  status      String    @default("TODO") // TODO, DONE
+  priority    String    @default("p4") // p1, p2, p3, p4
+  dueDate     DateTime?
+
   // Relationships
-  assigneeId     String
-  assignee       User      @relation("AssignedTasks", fields: [assigneeId], references: [id])
-  creatorId      String
-  creator        User      @relation("CreatedTasks", fields: [creatorId], references: [id])
-  projectId      String?
-  project        Project?  @relation(fields: [projectId], references: [id])
+  assigneeId String
+  assignee   User     @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  creatorId  String
+  creator    User     @relation("CreatedTasks", fields: [creatorId], references: [id])
+  projectId  String?
+  project    Project? @relation(fields: [projectId], references: [id])
 
   // Slack Context
   slackChannelId String?
@@ -50,6 +50,16 @@ model Task {
   slackMessageTs String?
   slackPermalink String?
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SlackInstallation {
+  id          String   @id @default(cuid())
+  teamId      String   @unique
+  teamName    String?
+  botToken    String
+  botId       String?
+  botUserId   String?
+  installedAt DateTime @default(now())
 }
