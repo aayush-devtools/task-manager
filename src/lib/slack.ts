@@ -1,0 +1,47 @@
+import { App, ExpressReceiver } from '@slack/bolt';
+// @ts-ignore
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+// Custom store for multi-workspace
+const installStore = {
+    storeInstallation: async (install: any) => {
+        // Already handled in callback, but can add here if needed
+    },
+    fetchInstallation: async (query: any) => {
+        const installation = await prisma.slackInstallation.findUnique({
+            where: { teamId: query.teamId },
+        });
+        if (!installation) throw new Error('No installation found');
+        return {
+            team: { id: installation.teamId, name: installation.teamName },
+            token: installation.botToken,
+            bot: { id: installation.botId, user_id: installation.botUserId },
+        };
+    },
+};
+
+// Use ExpressReceiver for Next.js integration
+const receiver = new ExpressReceiver({
+    signingSecret: process.env.SLACK_SIGNING_SECRET || '',
+    endpoints: '/api/slack/events', // Mount this in your Next.js app
+    installerOptions: {
+        installPath: '/api/slack/install', // Optional separate install route if needed
+        redirectUri: 'https://task-manager-fawn-delta.vercel.app/api/slack/oauth/callback',
+        stateSecret: 'your-state-secret', // For security
+    },
+    // @ts-ignore
+    installationStore: installStore,
+});
+
+// Initialize App
+const app = new App({ receiver });
+
+// Add your event listeners, commands, etc.
+app.message('hello', async ({ say }) => {
+    await say('Hi there!');
+});
+
+// Export receiver.app for mounting in Next.js (e.g., in a custom server or API route)
+export const slackHandler = receiver.app;
