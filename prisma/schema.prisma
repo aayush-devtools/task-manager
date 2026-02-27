@@ -12,7 +12,9 @@ datasource db {
 
 model User {
   id            String   @id @default(cuid())
-  slackId       String   @unique
+  slackId       String?  @unique
+  email         String?  @unique
+  password      String?
   name          String
   avatarUrl     String?
   tasksAssigned Task[]   @relation("AssignedTasks")
