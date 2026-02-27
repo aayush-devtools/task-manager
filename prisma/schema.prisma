@@ -14,6 +14,7 @@ model User {
   id            String  @id @default(cuid())
   slackId       String? @unique
   email         String? @unique
+  teamId        String?
   password      String?
   name          String
   avatarUrl     String?
@@ -24,6 +25,7 @@ model User {
 model Project {
   id             String  @id @default(cuid())
   name           String
+  teamId         String?
   slackChannelId String?
   tasks          Task[]
 }
@@ -31,6 +33,7 @@ model Project {
 model Task {
   id          String    @id @default(cuid())
   title       String
+  teamId      String?
   description String?
   status      String    @default("TODO") // TODO, DONE
   priority    String    @default("p4") // p1, p2, p3, p4

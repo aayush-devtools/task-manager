@@ -1,15 +1,16 @@
 import { App, ExpressReceiver } from '@slack/bolt';
-// @ts-ignore
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 // Custom store for multi-workspace
 const installStore = {
-    storeInstallation: async (install: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    storeInstallation: async (_install: unknown) => {
         // Already handled in callback, but can add here if needed
     },
-    fetchInstallation: async (query: any) => {
+    fetchInstallation: async (query: { teamId?: string }) => {
+        if (!query.teamId) throw new Error("No teamId provided");
         const installation = await prisma.slackInstallation.findUnique({
             where: { teamId: query.teamId },
         });
@@ -33,7 +34,7 @@ const receiver = new ExpressReceiver({
         installPath: '/api/slack/install', // Optional separate install route if needed
         redirectUriPath: '/api/slack/oauth/callback',
     },
-    // @ts-ignore
+    // @ts-expect-error - Bolt typings mismatch
     installationStore: installStore,
 });
 

@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   console.log("Slack Events Request received:", rawBody);
 
-  let payload: any;
+  let payload: { type?: string; challenge?: string; event?: { type?: string; text?: string; channel?: string; user?: string; ts?: string }; team_id?: string;[key: string]: unknown };
   try {
     payload = JSON.parse(rawBody);
   } catch (err) {
@@ -28,9 +28,9 @@ export async function POST(req: NextRequest) {
   // Handle URL verification first to simplify Slack setup
   if (payload.type === "url_verification") {
     console.log("URL Verification challenge received");
-    return new Response(payload.challenge, { 
-      status: 200, 
-      headers: { "Content-Type": "text/plain" } 
+    return new Response(payload.challenge, {
+      status: 200,
+      headers: { "Content-Type": "text/plain" }
     });
   }
 
@@ -60,6 +60,9 @@ export async function POST(req: NextRequest) {
   const ts = (event.ts as string) ?? "";
   const teamId = payload.team_id;
 
+  const installation = teamId ? await prisma.slackInstallation.findUnique({ where: { teamId } }) : null;
+  const botToken = installation?.botToken;
+
   // Build link
   const slackPermalink = teamId
     ? `https://slack.com/archives/${channel}/p${ts.replace(".", "")}`
@@ -69,8 +72,8 @@ export async function POST(req: NextRequest) {
   const title = messageText.replace(/<@[A-Z0-9]+>/g, "").trim() || "Slack task";
 
   try {
-    const creator = await upsertUser(creatorSlackId);
-    
+    const creator = await upsertUser(creatorSlackId, teamId, botToken);
+
     // Automatically assign to the creator for app_mentions by default
     await prisma.task.create({
       data: {
@@ -82,6 +85,7 @@ export async function POST(req: NextRequest) {
         slackChannelId: channel,
         slackMessageTs: ts,
         slackPermalink,
+        teamId,
       },
     });
   } catch (err) {
@@ -91,19 +95,20 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-async function upsertUser(slackId: string) {
+async function upsertUser(slackId: string, teamId?: string, botToken?: string) {
   let user = await prisma.user.findUnique({
     where: { slackId },
   });
 
   if (!user) {
     try {
-      const slackUser = await getUserInfo(slackId);
+      const slackUser = await getUserInfo(slackId, botToken);
       user = await prisma.user.create({
         data: {
           slackId,
-          name: slackUser.real_name || slackUser.name,
-          avatarUrl: slackUser.profile?.image_512 || slackUser.profile?.image_192,
+          name: slackUser?.real_name || slackUser?.name || "Unknown Slack User",
+          avatarUrl: slackUser?.profile?.image_512 || slackUser?.profile?.image_192 || null,
+          teamId,
         },
       });
     } catch {
@@ -112,6 +117,7 @@ async function upsertUser(slackId: string) {
         data: {
           slackId,
           name: "Unknown Slack User",
+          teamId,
         },
       });
     }

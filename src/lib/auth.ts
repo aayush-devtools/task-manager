@@ -41,6 +41,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           image: user.avatarUrl,
+          teamId: user.teamId,
         };
       }
     })
@@ -49,10 +50,10 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt"
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       if (account?.provider === "google") {
         if (!user.email) return false;
-        
+
         // Upsert user to DB
         let dbUser = await prisma.user.findUnique({
           where: { email: user.email }
@@ -62,18 +63,22 @@ export const authOptions: NextAuthOptions = {
           // Try to link with Slack
           let slackId = null;
           let avatarUrl = user.image || null;
+          let teamId = null;
 
-          const slackToken = process.env.SLACK_BOT_TOKEN;
-          if (slackToken) {
+          const installations = await prisma.slackInstallation.findMany();
+
+          for (const install of installations) {
             try {
-              const slackClient = new WebClient(slackToken);
-              const lookupRes = await slackClient.users.lookupByEmail({ email: user.email });
+              const slackClient = new WebClient(install.botToken);
+              const lookupRes = await slackClient.users.lookupByEmail({ email: user.email as string });
               if (lookupRes.ok && lookupRes.user?.id) {
                 slackId = lookupRes.user.id;
                 avatarUrl = lookupRes.user.profile?.image_512 || lookupRes.user.profile?.image_192 || avatarUrl;
+                teamId = install.teamId;
+                break;
               }
             } catch (err) {
-              console.log("Could not find Slack user for Google auth:", err);
+              console.log(`Could not find Slack user in team ${install.teamId}`, err);
             }
           }
 
@@ -90,6 +95,7 @@ export const authOptions: NextAuthOptions = {
                   email: user.email,
                   name: user.name || existingSlackUser.name,
                   avatarUrl: avatarUrl || existingSlackUser.avatarUrl,
+                  teamId: teamId || existingSlackUser.teamId,
                 }
               });
             } else {
@@ -98,7 +104,8 @@ export const authOptions: NextAuthOptions = {
                   email: user.email,
                   name: user.name || "Google User",
                   avatarUrl,
-                  slackId
+                  slackId,
+                  teamId
                 }
               });
             }
@@ -112,9 +119,12 @@ export const authOptions: NextAuthOptions = {
             });
           }
         }
-        
+
         // Update user id to be our DB id, so the JWT token gets the right id
-        user.id = dbUser.id;
+        if (dbUser) {
+          user.id = dbUser.id;
+          user.teamId = dbUser.teamId;
+        }
         return true;
       }
       return true;
@@ -122,12 +132,14 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user && token.sub) {
         session.user.id = token.sub;
+        session.user.teamId = token.teamId;
       }
       return session;
     },
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user }) {
       if (user) {
         token.sub = user.id;
+        token.teamId = user.teamId;
       }
       if (token.email) {
         const dbUser = await prisma.user.findUnique({
@@ -135,6 +147,7 @@ export const authOptions: NextAuthOptions = {
         });
         if (dbUser) {
           token.sub = dbUser.id;
+          token.teamId = dbUser.teamId;
         }
       }
       return token;

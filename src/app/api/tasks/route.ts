@@ -23,6 +23,7 @@ export async function POST(req: Request) {
         priority: priority || "p4",
         dueDate: dueDate ? new Date(dueDate) : null,
         creatorId: session.user.id,
+        teamId: session.user.teamId || null,
         status: "TODO"
       },
       include: {

@@ -1,5 +1,5 @@
-export async function slackPost(method: string, body: Record<string, unknown>) {
-  const token = process.env.SLACK_BOT_TOKEN;
+export async function slackPost(method: string, body: Record<string, unknown>, botToken?: string) {
+  const token = botToken || process.env.SLACK_BOT_TOKEN;
   if (!token) {
     throw new Error("SLACK_BOT_TOKEN is not set");
   }
@@ -13,7 +13,7 @@ export async function slackPost(method: string, body: Record<string, unknown>) {
     body: JSON.stringify(body),
   });
 
-  const data = (await response.json()) as { ok: boolean; error?: string; [key: string]: any };
+  const data = (await response.json()) as { ok: boolean; error?: string;[key: string]: unknown };
   if (!data.ok) {
     throw new Error(`Slack API error (${method}): ${data.error}`);
   }
@@ -38,31 +38,31 @@ export async function respondToUrl(url: string, body: Record<string, unknown>) {
   return response;
 }
 
-export async function openModal(triggerId: string, view: Record<string, unknown>) {
+export async function openModal(triggerId: string, view: Record<string, unknown>, botToken?: string) {
   return slackPost("views.open", {
     trigger_id: triggerId,
     view,
-  });
+  }, botToken);
 }
 
-export async function postMessage(channel: string, text: string, threadTs?: string) {
+export async function postMessage(channel: string, text: string, threadTs?: string, botToken?: string) {
   return slackPost("chat.postMessage", {
     channel,
     text,
     thread_ts: threadTs,
-  });
+  }, botToken);
 }
 
-export async function getPermalink(channel: string, messageTs: string) {
+export async function getPermalink(channel: string, messageTs: string, botToken?: string) {
   const data = await slackPost("chat.getPermalink", {
     channel,
     message_ts: messageTs,
-  });
+  }, botToken);
   return data.permalink as string;
 }
 
-export async function getUserInfo(userId: string) {
-  const token = process.env.SLACK_BOT_TOKEN;
+export async function getUserInfo(userId: string, botToken?: string) {
+  const token = botToken || process.env.SLACK_BOT_TOKEN;
   console.log(`Fetching user info for ${userId}...`);
   const response = await fetch(`https://slack.com/api/users.info?user=${userId}`, {
     method: "GET",
@@ -71,7 +71,7 @@ export async function getUserInfo(userId: string) {
     },
   });
 
-  const data = (await response.json()) as { ok: boolean; user?: any; error?: string };
+  const data = (await response.json()) as { ok: boolean; user?: { name?: string; real_name?: string; profile?: { image_512?: string; image_192?: string } }; error?: string };
   if (!data.ok) {
     console.error(`Slack API error (users.info) for user ${userId}: ${data.error}`);
     throw new Error(`Slack API error (users.info): ${data.error}`);
