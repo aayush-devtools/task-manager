@@ -45,15 +45,13 @@ export async function POST(req: NextRequest) {
     const command = params.get("command");
     const responseUrl = params.get("response_url");
 
-      if (command === "/task") {
-        const triggerId = params.get("trigger_id");
-        const text = params.get("text") || "";
-        const channelId = params.get("channel_id");
-        console.log("Slash command /task received", { triggerId, text, channelId });
+        if (command === "/task") {
+          const triggerId = params.get("trigger_id");
+          const text = params.get("text") || "";
+          const channelId = params.get("channel_id");
+          console.log("Slash command /task received", { triggerId, text, channelId });
 
-        if (triggerId) {
-          // Open modal in background to respond to Slack faster
-          Promise.resolve().then(async () => {
+          if (triggerId) {
             try {
               const modal = buildTaskModal(text, undefined, channelId || undefined, responseUrl || undefined);
               await openModal(triggerId, modal);
@@ -61,18 +59,15 @@ export async function POST(req: NextRequest) {
             } catch (err) {
               console.error("Error opening modal for /task:", err);
             }
-          });
+          }
+          return new Response("", { status: 200 });
         }
-        return new Response("", { status: 200 });
-      }
 
-      if (command === "/tasks") {
-        const channelId = params.get("channel_id") || "";
-        const userId = params.get("user_id") || "";
-        console.log("Slash command /tasks received", { channelId, userId, responseUrl });
+        if (command === "/tasks") {
+          const channelId = params.get("channel_id") || "";
+          const userId = params.get("user_id") || "";
+          console.log("Slash command /tasks received", { channelId, userId, responseUrl });
 
-        // Process in background to respond to Slack faster
-        Promise.resolve().then(async () => {
           try {
             // Fetch last 10 tasks from DB
             const tasks = await prisma.task.findMany({
@@ -121,9 +116,8 @@ export async function POST(req: NextRequest) {
               await postMessage(channelId, "Sorry, I had trouble fetching the task list.");
             }
           }
-        });
-        return new Response("", { status: 200 });
-      }
+          return new Response("", { status: 200 });
+        }
 
     return new Response("", { status: 200 });
   }
