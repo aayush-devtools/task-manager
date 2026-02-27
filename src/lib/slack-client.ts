@@ -13,7 +13,7 @@ export async function slackPost(method: string, body: Record<string, unknown>) {
     body: JSON.stringify(body),
   });
 
-  const data = (await response.json()) as { ok: boolean; error?: string; [key: string]: unknown };
+  const data = (await response.json()) as { ok: boolean; error?: string; [key: string]: any };
   if (!data.ok) {
     throw new Error(`Slack API error (${method}): ${data.error}`);
   }
