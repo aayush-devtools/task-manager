@@ -5,6 +5,31 @@ import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 import { WebClient } from "@slack/web-api";
 
+/**
+ * Scans ALL Slack installations for the given email and upserts a UserWorkspace
+ * record for every workspace where the user is found.
+ * Returns the teamId of the first workspace found (for use as primary).
+ */
+async function syncUserWorkspaces(userId: string, email: string): Promise<void> {
+  const installations = await prisma.slackInstallation.findMany();
+
+  for (const install of installations) {
+    try {
+      const slackClient = new WebClient(install.botToken);
+      const lookupRes = await slackClient.users.lookupByEmail({ email });
+      if (lookupRes.ok && lookupRes.user?.id) {
+        await prisma.userWorkspace.upsert({
+          where: { userId_teamId: { userId, teamId: install.teamId } },
+          update: {},
+          create: { userId, teamId: install.teamId },
+        });
+      }
+    } catch {
+      // Missing scope or user not in workspace — skip silently
+    }
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -58,15 +83,15 @@ export const authOptions: NextAuthOptions = {
           where: { email: user.email }
         });
 
-        const needsSlackLink = !dbUser || (!dbUser.slackId && !dbUser.teamId);
-
-        if (needsSlackLink) {
+        // --- Identity linking: only needed if user has no Slack identity yet ---
+        if (!dbUser?.slackId || !dbUser?.teamId) {
           let slackId: string | null = null;
           let avatarUrl = user.image || dbUser?.avatarUrl || null;
-          let teamId: string | null = null;
+          let primaryTeamId: string | null = null;
 
           const installations = await prisma.slackInstallation.findMany();
 
+          // Find the first workspace to use as the primary Slack identity
           for (const install of installations) {
             try {
               const slackClient = new WebClient(install.botToken);
@@ -74,7 +99,7 @@ export const authOptions: NextAuthOptions = {
               if (lookupRes.ok && lookupRes.user?.id) {
                 slackId = lookupRes.user.id;
                 avatarUrl = lookupRes.user.profile?.image_512 || lookupRes.user.profile?.image_192 || avatarUrl;
-                teamId = install.teamId;
+                primaryTeamId = install.teamId;
                 break;
               }
             } catch (err) {
@@ -92,7 +117,7 @@ export const authOptions: NextAuthOptions = {
                   email: user.email,
                   name: user.name || existingSlackUser.name,
                   avatarUrl: avatarUrl || existingSlackUser.avatarUrl,
-                  teamId: teamId || existingSlackUser.teamId,
+                  teamId: primaryTeamId || existingSlackUser.teamId,
                 }
               });
               await prisma.user.deleteMany({
@@ -101,20 +126,11 @@ export const authOptions: NextAuthOptions = {
             } else if (dbUser) {
               dbUser = await prisma.user.update({
                 where: { id: dbUser.id },
-                data: { slackId, teamId, avatarUrl: avatarUrl || dbUser.avatarUrl }
+                data: { slackId, teamId: primaryTeamId, avatarUrl: avatarUrl || dbUser.avatarUrl }
               });
             } else {
               dbUser = await prisma.user.create({
-                data: { email: user.email, name: user.name || "Google User", avatarUrl, slackId, teamId }
-              });
-            }
-
-            // Ensure UserWorkspace record exists for this workspace
-            if (dbUser && teamId) {
-              await prisma.userWorkspace.upsert({
-                where: { userId_teamId: { userId: dbUser.id, teamId } },
-                update: {},
-                create: { userId: dbUser.id, teamId },
+                data: { email: user.email, name: user.name || "Google User", avatarUrl, slackId, teamId: primaryTeamId }
               });
             }
           } else if (!dbUser) {
@@ -126,6 +142,8 @@ export const authOptions: NextAuthOptions = {
 
         if (dbUser) {
           user.id = dbUser.id;
+          // Scan ALL workspaces and populate UserWorkspace for every one the user belongs to
+          await syncUserWorkspaces(dbUser.id, user.email);
         }
 
         return true;
@@ -173,6 +191,7 @@ export const authOptions: NextAuthOptions = {
           if (dbUser.teamId) {
             token.teamId = dbUser.teamId;
           } else if (!token.teamId && token.email) {
+            // No teamId yet — scan all workspaces to find one and persist it
             const installations = await prisma.slackInstallation.findMany();
             for (const install of installations) {
               try {
@@ -184,19 +203,24 @@ export const authOptions: NextAuthOptions = {
                     where: { id: dbUser.id },
                     data: { teamId: install.teamId }
                   });
-                  await prisma.userWorkspace.upsert({
-                    where: { userId_teamId: { userId: dbUser.id, teamId: install.teamId } },
-                    update: {},
-                    create: { userId: dbUser.id, teamId: install.teamId },
-                  });
+                  // Don't break — let syncUserWorkspaces handle all workspaces
                   break;
                 }
               } catch { }
             }
+
+            if (token.email) {
+              await syncUserWorkspaces(dbUser.id, token.email);
+            }
           }
 
-          // Load all workspace memberships with names from SlackInstallation
-          const workspaceIds = dbUser.workspaces.map(w => w.teamId);
+          // Re-fetch workspaces after potential sync
+          const freshWorkspaces = await prisma.userWorkspace.findMany({
+            where: { userId: dbUser.id },
+            select: { teamId: true },
+          });
+          const workspaceIds = freshWorkspaces.map(w => w.teamId);
+
           if (workspaceIds.length > 0) {
             const installations = await prisma.slackInstallation.findMany({
               where: { teamId: { in: workspaceIds } },

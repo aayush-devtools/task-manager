@@ -54,7 +54,8 @@ export function CreateTaskModal({ projects = [], defaultProjectId }: CreateTaskM
     const priority = formData.get("priority") as string;
     const dueDateStr = formData.get("dueDate") as string;
     const dueDate = dueDateStr ? new Date(dueDateStr).toISOString() : null;
-    const projectId = formData.get("projectId") as string || null;
+    const projectIdRaw = formData.get("projectId") as string;
+    const projectId = projectIdRaw && projectIdRaw !== "none" ? projectIdRaw : null;
 
     try {
       const res = await fetch("/api/tasks", {
@@ -116,12 +117,12 @@ export function CreateTaskModal({ projects = [], defaultProjectId }: CreateTaskM
             {projects.length > 0 && (
               <div className="grid gap-2">
                 <Label htmlFor="projectId">Project (optional)</Label>
-                <Select name="projectId" defaultValue={defaultProjectId || ""}>
+                <Select name="projectId" defaultValue={defaultProjectId || "none"}>
                   <SelectTrigger>
                     <SelectValue placeholder="No project" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No project</SelectItem>
+                    <SelectItem value="none">No project</SelectItem>
                     {projects.map(project => (
                       <SelectItem key={project.id} value={project.id}>
                         {project.name}
