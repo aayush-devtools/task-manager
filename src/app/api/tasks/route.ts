@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import prisma from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -53,7 +53,6 @@ export async function POST(req: Request) {
       },
     });
 
-    // Send assignment emails (fire-and-forget — don't block response)
     const emailPayload = {
       taskId: task.id,
       taskTitle: task.title,
@@ -69,15 +68,18 @@ export async function POST(req: Request) {
       ...task.coAssignees.map(ca => ({ user: ca.user })),
     ].filter(r => !!r.user.email);
 
-    Promise.all(
-      recipients.map(r =>
-        sendTaskAssignedEmail({
-          ...emailPayload,
-          to: r.user.email!,
-          assigneeName: r.user.name,
-        })
-      )
-    ).catch(err => console.error("Assignment emails failed:", err));
+    // Use after() so Vercel doesn't kill the email calls when the response is sent
+    after(async () => {
+      await Promise.all(
+        recipients.map(r =>
+          sendTaskAssignedEmail({
+            ...emailPayload,
+            to: r.user.email!,
+            assigneeName: r.user.name,
+          })
+        )
+      ).catch(err => console.error("Assignment emails failed:", err));
+    });
 
     return NextResponse.json(task, { status: 201 });
   } catch (error) {

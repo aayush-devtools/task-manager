@@ -209,36 +209,42 @@ export async function POST(req: NextRequest) {
       // Revalidate dashboard
       revalidatePath("/");
 
-      // Send assignment emails (fire-and-forget)
       const emailRecipients = [
         assignee,
         ...coSlackIds.map(sid => userBySlackId[sid]),
       ].filter(u => u?.email && u.id !== creator.id);
 
-      Promise.all(
-        emailRecipients.map(u =>
-          sendTaskAssignedEmail({
-            to: u.email!,
-            taskId: createdTask.id,
-            taskTitle: title,
-            assigneeName: u.name,
-            creatorName: creator.name,
-            priority,
-            dueDate: createdTask.dueDate,
-            projectName: createdTask.project?.name ?? null,
-            url,
-          })
-        )
-      ).catch(err => console.error("Slack task assignment emails failed:", err));
-
       const assigneeNames = [assignee, ...coSlackIds.map(sid => userBySlackId[sid])].map(u => u?.name).filter(Boolean).join(", ");
-      // Use after() to send confirmation AFTER the response is sent (avoids Vercel function termination)
       const confirmationText = `✅ *Task Created:* "${title}"\n👤 *Assigned to:* ${assigneeNames}${dueDateStr ? `\n📅 *Due:* ${dueDateStr}` : ""}${projectId ? `\n📁 *Project:* ${values.project_block?.project_select?.selected_option?.text?.text || ""}` : ""}`;
       const savedResponseUrl = privateMetadata.responseUrl;
       const savedChannelId = privateMetadata.channelId;
       const savedBotToken = botToken;
+      const savedTaskId = createdTask.id;
+      const savedDueDate = createdTask.dueDate;
+      const savedProjectName = createdTask.project?.name ?? null;
+      const savedCreatorName = creator.name;
 
+      // Use after() to run both emails and Slack notification AFTER the response is sent
+      // This prevents Vercel serverless from killing the work before it completes
       after(async () => {
+        // Send assignment emails
+        await Promise.all(
+          emailRecipients.map(u =>
+            sendTaskAssignedEmail({
+              to: u.email!,
+              taskId: savedTaskId,
+              taskTitle: title,
+              assigneeName: u.name,
+              creatorName: savedCreatorName,
+              priority,
+              dueDate: savedDueDate,
+              projectName: savedProjectName,
+              url,
+            })
+          )
+        ).catch(err => console.error("Slack task assignment emails failed:", err));
+
+        // Send Slack confirmation
         if (savedResponseUrl) {
           try {
             await respondToUrl(savedResponseUrl, {
