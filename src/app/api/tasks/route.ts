@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { sendTaskAssignedEmail } from "@/lib/email";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -46,9 +47,37 @@ export async function POST(req: Request) {
       },
       include: {
         assignee: true,
+        creator: true,
+        project: true,
         coAssignees: { include: { user: true } },
       },
     });
+
+    // Send assignment emails (fire-and-forget — don't block response)
+    const emailPayload = {
+      taskId: task.id,
+      taskTitle: task.title,
+      creatorName: task.creator.name,
+      priority: task.priority,
+      dueDate: task.dueDate,
+      projectName: task.project?.name ?? null,
+      url: task.url,
+    };
+
+    const recipients = [
+      { user: task.assignee },
+      ...task.coAssignees.map(ca => ({ user: ca.user })),
+    ].filter(r => r.user.email && r.user.id !== task.creatorId);
+
+    Promise.all(
+      recipients.map(r =>
+        sendTaskAssignedEmail({
+          ...emailPayload,
+          to: r.user.email!,
+          assigneeName: r.user.name,
+        })
+      )
+    ).catch(err => console.error("Assignment emails failed:", err));
 
     return NextResponse.json(task, { status: 201 });
   } catch (error) {

@@ -4,6 +4,7 @@ import { verifySlackSignature } from "@/lib/slack-verify";
 import { buildTaskModal } from "@/lib/slack-modal";
 import { openModal, getUserInfo, getPermalink, postMessage, respondToUrl } from "@/lib/slack-client";
 import prisma from "@/lib/db";
+import { sendTaskAssignedEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -185,7 +186,7 @@ export async function POST(req: NextRequest) {
       const coAssigneeDbIds = coSlackIds.map(sid => userBySlackId[sid]?.id).filter(Boolean) as string[];
 
       // Save task
-      await prisma.task.create({
+      const createdTask = await prisma.task.create({
         data: {
           title,
           description,
@@ -202,10 +203,33 @@ export async function POST(req: NextRequest) {
             ? { create: coAssigneeDbIds.map(uid => ({ userId: uid })) }
             : undefined,
         },
+        include: { project: true },
       });
 
       // Revalidate dashboard
       revalidatePath("/");
+
+      // Send assignment emails (fire-and-forget)
+      const emailRecipients = [
+        assignee,
+        ...coSlackIds.map(sid => userBySlackId[sid]),
+      ].filter(u => u?.email && u.id !== creator.id);
+
+      Promise.all(
+        emailRecipients.map(u =>
+          sendTaskAssignedEmail({
+            to: u.email!,
+            taskId: createdTask.id,
+            taskTitle: title,
+            assigneeName: u.name,
+            creatorName: creator.name,
+            priority,
+            dueDate: createdTask.dueDate,
+            projectName: createdTask.project?.name ?? null,
+            url,
+          })
+        )
+      ).catch(err => console.error("Slack task assignment emails failed:", err));
 
       const assigneeNames = [assignee, ...coSlackIds.map(sid => userBySlackId[sid])].map(u => u?.name).filter(Boolean).join(", ");
       // Use after() to send confirmation AFTER the response is sent (avoids Vercel function termination)
