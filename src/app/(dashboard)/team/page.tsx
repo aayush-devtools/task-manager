@@ -7,13 +7,13 @@ import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-async function getAllTasks(teamIds: string[]): Promise<Task[]> {
-  if (teamIds.length === 0) return [];
+async function getAllTasks(teamId: string | null): Promise<Task[]> {
+  if (!teamId) return [];
 
   const tasks = await prisma.task.findMany({
     where: {
       status: "TODO",
-      teamId: { in: teamIds },
+      teamId,
     },
     include: { assignee: true },
     orderBy: { createdAt: "desc" },
@@ -34,10 +34,8 @@ async function getAllTasks(teamIds: string[]): Promise<Task[]> {
 
 export default async function TeamPage() {
   const session = await getServerSession(authOptions);
-  // Support either single teamId or array of teamIds captured from JWT
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const activeTeams = (session?.user as any)?.teamIds || (session?.user?.teamId ? [session.user.teamId] : []);
-  const tasks = await getAllTasks(activeTeams);
+  const primaryTeamId = session?.user?.teamId || null;
+  const tasks = await getAllTasks(primaryTeamId);
 
   return (
     <div className="flex flex-col gap-6">

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const clientId = process.env.SLACK_CLIENT_ID;
   const clientSecret = process.env.SLACK_CLIENT_SECRET;
-  const redirectUri = 'https://task-manager-fawn-delta.vercel.app/api/slack/oauth/callback'; // Match your registered URL in Slack dashboard
+  const redirectUri = "https://task-manager-fawn-delta.vercel.app/api/slack/oauth/callback";
 
   if (!clientId || !clientSecret) {
     return NextResponse.json({ error: 'Missing Slack credentials' }, { status: 500 });

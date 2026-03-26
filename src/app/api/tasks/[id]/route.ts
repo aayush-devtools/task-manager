@@ -14,11 +14,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { status } = body;
 
     try {
-        const task = await prisma.task.update({
+        // Verify the task belongs to the user's workspace or is assigned to them
+        const task = await prisma.task.findUnique({ where: { id } });
+        if (!task) {
+            return NextResponse.json({ error: "Task not found" }, { status: 404 });
+        }
+
+        const userTeamId = session.user.teamId || null;
+        const isAssignee = task.assigneeId === session.user.id;
+        const sameWorkspace = userTeamId && task.teamId === userTeamId;
+
+        if (!isAssignee && !sameWorkspace) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
+        const updated = await prisma.task.update({
             where: { id },
             data: { status },
         });
-        return NextResponse.json(task);
+        return NextResponse.json(updated);
     } catch (error) {
         console.error("Failed to update task:", error);
         return NextResponse.json({ error: "Failed to update task" }, { status: 500 });

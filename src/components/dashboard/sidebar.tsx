@@ -43,9 +43,9 @@ export function Sidebar({ user }: { user: { name?: string | null; email?: string
           <button className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground">
             <Bell className="h-4 w-4" />
           </button>
-          <button className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground">
+          <Link href="/settings" className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground">
             <Settings className="h-4 w-4" />
-          </button>
+          </Link>
         </div>
       </div>
 
