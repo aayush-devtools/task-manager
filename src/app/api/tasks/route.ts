@@ -10,10 +10,23 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { title, assigneeId, dueDate, priority } = await req.json();
+    const { title, assigneeId, dueDate, priority, projectId } = await req.json();
 
     if (!title || !assigneeId) {
       return NextResponse.json({ error: "Title and assignee are required" }, { status: 400 });
+    }
+
+    const teamId = session.user.teamId || null;
+
+    // If a projectId is provided, verify it belongs to the user's workspace
+    if (projectId) {
+      if (!teamId) {
+        return NextResponse.json({ error: "You must be in a workspace to assign tasks to projects" }, { status: 403 });
+      }
+      const project = await prisma.project.findFirst({ where: { id: projectId, teamId } });
+      if (!project) {
+        return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      }
     }
 
     const task = await prisma.task.create({
@@ -23,8 +36,9 @@ export async function POST(req: Request) {
         priority: priority || "p4",
         dueDate: dueDate ? new Date(dueDate) : null,
         creatorId: session.user.id,
-        teamId: session.user.teamId || null,
-        status: "TODO"
+        teamId,
+        status: "TODO",
+        projectId: projectId || null,
       },
       include: {
         assignee: true

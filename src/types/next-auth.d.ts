@@ -5,6 +5,7 @@ declare module "next-auth" {
     user: {
       id: string;
       teamId?: string | null;
+      workspaces?: { teamId: string; teamName: string | null }[];
     } & DefaultSession["user"];
   }
 

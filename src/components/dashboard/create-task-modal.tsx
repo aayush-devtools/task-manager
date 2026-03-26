@@ -24,7 +24,12 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
-export function CreateTaskModal() {
+interface CreateTaskModalProps {
+  projects?: { id: string; name: string }[];
+  defaultProjectId?: string;
+}
+
+export function CreateTaskModal({ projects = [], defaultProjectId }: CreateTaskModalProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<{ id: string, name: string, email: string }[]>([]);
@@ -49,12 +54,13 @@ export function CreateTaskModal() {
     const priority = formData.get("priority") as string;
     const dueDateStr = formData.get("dueDate") as string;
     const dueDate = dueDateStr ? new Date(dueDateStr).toISOString() : null;
+    const projectId = formData.get("projectId") as string || null;
 
     try {
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, assigneeId, priority, dueDate }),
+        body: JSON.stringify({ title, assigneeId, priority, dueDate, projectId }),
       });
 
       if (!res.ok) throw new Error("Failed to create task");
@@ -106,6 +112,25 @@ export function CreateTaskModal() {
                 </SelectContent>
               </Select>
             </div>
+
+            {projects.length > 0 && (
+              <div className="grid gap-2">
+                <Label htmlFor="projectId">Project (optional)</Label>
+                <Select name="projectId" defaultValue={defaultProjectId || ""}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="No project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No project</SelectItem>
+                    {projects.map(project => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">

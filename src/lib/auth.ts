@@ -23,7 +23,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email }
+          where: { email: credentials.email },
         });
 
         if (!user || !user.password) {
@@ -42,7 +42,6 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           image: user.avatarUrl,
           teamId: user.teamId,
-          teamIds: user.teamId ? [user.teamId] : [],
         };
       }
     })
@@ -59,7 +58,6 @@ export const authOptions: NextAuthOptions = {
           where: { email: user.email }
         });
 
-        // Try to link with Slack if user doesn't exist yet, or exists but isn't linked
         const needsSlackLink = !dbUser || (!dbUser.slackId && !dbUser.teamId);
 
         if (needsSlackLink) {
@@ -72,7 +70,6 @@ export const authOptions: NextAuthOptions = {
           for (const install of installations) {
             try {
               const slackClient = new WebClient(install.botToken);
-              // Requires users:read.email scope — silently skipped if missing
               const lookupRes = await slackClient.users.lookupByEmail({ email: user.email as string });
               if (lookupRes.ok && lookupRes.user?.id) {
                 slackId = lookupRes.user.id;
@@ -86,11 +83,9 @@ export const authOptions: NextAuthOptions = {
           }
 
           if (slackId) {
-            // Check if there's an existing Slack-only user record to merge with
             const existingSlackUser = await prisma.user.findUnique({ where: { slackId } });
 
             if (existingSlackUser) {
-              // Merge: update the Slack user record with the Google email and use it as primary
               dbUser = await prisma.user.update({
                 where: { slackId },
                 data: {
@@ -100,12 +95,10 @@ export const authOptions: NextAuthOptions = {
                   teamId: teamId || existingSlackUser.teamId,
                 }
               });
-              // Clean up the orphaned email-only user record if one exists
               await prisma.user.deleteMany({
                 where: { email: user.email, slackId: null, id: { not: dbUser.id } }
               });
             } else if (dbUser) {
-              // Update existing Google user with Slack identity
               dbUser = await prisma.user.update({
                 where: { id: dbUser.id },
                 data: { slackId, teamId, avatarUrl: avatarUrl || dbUser.avatarUrl }
@@ -115,6 +108,15 @@ export const authOptions: NextAuthOptions = {
                 data: { email: user.email, name: user.name || "Google User", avatarUrl, slackId, teamId }
               });
             }
+
+            // Ensure UserWorkspace record exists for this workspace
+            if (dbUser && teamId) {
+              await prisma.userWorkspace.upsert({
+                where: { userId_teamId: { userId: dbUser.id, teamId } },
+                update: {},
+                create: { userId: dbUser.id, teamId },
+              });
+            }
           } else if (!dbUser) {
             dbUser = await prisma.user.create({
               data: { email: user.email, name: user.name || "Google User", avatarUrl: user.image || null }
@@ -122,7 +124,6 @@ export const authOptions: NextAuthOptions = {
           }
         }
 
-        // Set session user id to our DB record id
         if (dbUser) {
           user.id = dbUser.id;
         }
@@ -136,32 +137,42 @@ export const authOptions: NextAuthOptions = {
       if (session.user && token.sub) {
         session.user.id = token.sub;
         session.user.teamId = token.teamId || null;
-        // Always a single-workspace array to prevent cross-workspace data leakage
-        session.user.teamIds = token.teamId ? [token.teamId] : [];
+        session.user.workspaces = token.workspaces || [];
       }
       return session;
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async jwt({ token, user }: { token: any, user: any }) {
+    async jwt({ token, user, trigger, session }: { token: any, user: any, trigger?: string, session?: any }) {
+      // Handle workspace switch: client calls useSession().update({ teamId: newTeamId })
+      if (trigger === "update" && session?.teamId) {
+        token.teamId = session.teamId;
+        if (token.sub) {
+          await prisma.user.update({
+            where: { id: token.sub },
+            data: { teamId: session.teamId },
+          });
+        }
+        return token;
+      }
+
       if (user) {
         token.sub = user.id;
         token.teamId = user.teamId || null;
       }
 
-      // Resolve DB user and workspace on first token creation or when teamId is missing
-      if (token.email && !token.teamId) {
+      // Resolve DB user and all workspace memberships on first token creation
+      if (token.sub && (!token.teamId || !token.workspaces)) {
         const dbUser = await prisma.user.findUnique({
-          where: { email: token.email }
+          where: { id: token.sub },
+          include: { workspaces: true }
         });
 
         if (dbUser) {
           token.sub = dbUser.id;
 
           if (dbUser.teamId) {
-            // Use the workspace already stored in DB
             token.teamId = dbUser.teamId;
-          } else {
-            // Try to find the user's workspace via Slack — stop at the first match
+          } else if (!token.teamId && token.email) {
             const installations = await prisma.slackInstallation.findMany();
             for (const install of installations) {
               try {
@@ -169,18 +180,35 @@ export const authOptions: NextAuthOptions = {
                 const lookupRes = await slackClient.users.lookupByEmail({ email: token.email });
                 if (lookupRes.ok && lookupRes.user?.id) {
                   token.teamId = install.teamId;
-                  // Persist so we don't re-query Slack on every token refresh
                   await prisma.user.update({
                     where: { id: dbUser.id },
                     data: { teamId: install.teamId }
+                  });
+                  await prisma.userWorkspace.upsert({
+                    where: { userId_teamId: { userId: dbUser.id, teamId: install.teamId } },
+                    update: {},
+                    create: { userId: dbUser.id, teamId: install.teamId },
                   });
                   break;
                 }
               } catch { }
             }
           }
+
+          // Load all workspace memberships with names from SlackInstallation
+          const workspaceIds = dbUser.workspaces.map(w => w.teamId);
+          if (workspaceIds.length > 0) {
+            const installations = await prisma.slackInstallation.findMany({
+              where: { teamId: { in: workspaceIds } },
+              select: { teamId: true, teamName: true },
+            });
+            token.workspaces = installations;
+          } else {
+            token.workspaces = [];
+          }
         }
       }
+
       return token;
     }
   },

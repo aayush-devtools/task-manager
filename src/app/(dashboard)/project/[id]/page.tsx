@@ -4,17 +4,16 @@ import { Hash } from "lucide-react";
 import { Task } from "@/components/dashboard/task-item";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { CreateTaskModal } from "@/components/dashboard/create-task-modal";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-async function getTasks(projectId: string, teamIds: string[]): Promise<Task[]> {
-  // If no teamId is connected to the session, we should not leak tasks
-  if (!teamIds || teamIds.length === 0) return [];
-
+async function getTasks(projectId: string, teamId: string): Promise<Task[]> {
   const tasks = await prisma.task.findMany({
     where: {
-      projectId: projectId === "slack-tasks" ? null : projectId,
-      teamId: { in: teamIds },
+      projectId,
+      teamId,
     },
     include: { assignee: true },
     orderBy: { createdAt: "desc" },
@@ -37,21 +36,46 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const session = await getServerSession(authOptions);
 
-  // Right now, 'slack-tasks' is a pseudo-project for all tasks not strictly assigned a project ID
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const activeTeams = (session?.user as any)?.teamIds || (session?.user?.teamId ? [session.user.teamId] : []);
-  const tasks = session?.user?.id ? await getTasks(id, activeTeams) : [];
+  const teamId = session?.user?.teamId;
+  if (!teamId) {
+    return (
+      <div className="flex flex-col gap-6">
+        <header className="flex flex-col gap-1.5 border-b pb-4">
+          <h1 className="text-xl font-bold tracking-tight">Project</h1>
+          <p className="text-sm text-muted-foreground">Connect a Slack workspace to see workspace projects.</p>
+        </header>
+      </div>
+    );
+  }
 
+  const project = await prisma.project.findFirst({
+    where: { id, teamId },
+  });
+
+  if (!project) {
+    notFound();
+  }
+
+  const projects = await prisma.project.findMany({
+    where: { teamId },
+    orderBy: { name: "asc" },
+  });
+
+  const tasks = await getTasks(id, teamId);
   const todoTasks = tasks.filter((t) => t.status === "TODO");
   const doneTasks = tasks.filter((t) => t.status === "DONE");
 
-  const projectName = id === "slack-tasks" ? "Slack Tasks" : "Project " + id;
-
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1.5 border-b pb-4">
-        <h1 className="text-xl font-bold tracking-tight">{projectName}</h1>
-        <p className="text-sm text-muted-foreground">Tasks for this project</p>
+      <header className="flex items-center justify-between border-b pb-4">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-xl font-bold tracking-tight">{project.name}</h1>
+          <p className="text-sm text-muted-foreground">Tasks for this project</p>
+        </div>
+        <CreateTaskModal
+          projects={projects.map(p => ({ id: p.id, name: p.name }))}
+          defaultProjectId={id}
+        />
       </header>
 
       <div className="flex flex-col gap-8">
@@ -67,7 +91,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               <div>
                 <p className="text-sm font-medium text-foreground">No pending tasks</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Tasks created in related channels will appear here.
+                  Create a task to get started.
                 </p>
               </div>
             </div>
