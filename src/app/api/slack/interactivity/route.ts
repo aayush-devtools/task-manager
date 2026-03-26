@@ -270,20 +270,50 @@ export async function POST(req: NextRequest) {
 async function upsertUser(slackId: string, teamId: string, botToken?: string) {
   try {
     const existingUser = await prisma.user.findUnique({ where: { slackId } });
-    if (existingUser) return existingUser;
+    if (existingUser) {
+      // If we already have this user but they have no email, try to backfill it
+      if (!existingUser.email) {
+        try {
+          const slackUser = await getUserInfo(slackId, botToken);
+          const slackEmail = slackUser?.profile?.email || null;
+          if (slackEmail) {
+            // Only set if no other user already has this email
+            const emailTaken = await prisma.user.findUnique({ where: { email: slackEmail } });
+            if (!emailTaken) {
+              return await prisma.user.update({
+                where: { slackId },
+                data: { email: slackEmail },
+              });
+            }
+          }
+        } catch { /* email backfill is best-effort */ }
+      }
+      return existingUser;
+    }
 
     const slackUser = await getUserInfo(slackId, botToken);
+    const slackEmail = slackUser?.profile?.email || null;
+
+    // Check if email is already taken by another account before setting it
+    let emailToSave: string | null = slackEmail;
+    if (slackEmail) {
+      const emailTaken = await prisma.user.findUnique({ where: { email: slackEmail } });
+      if (emailTaken) emailToSave = null;
+    }
+
     return await prisma.user.upsert({
       where: { slackId },
       update: {
         name: slackUser?.real_name || slackUser?.name || "Unknown User",
         avatarUrl: slackUser?.profile?.image_512 || slackUser?.profile?.image_192 || null,
+        ...(emailToSave && { email: emailToSave }),
       },
       create: {
         slackId,
         name: slackUser?.real_name || slackUser?.name || "Unknown User",
         avatarUrl: slackUser?.profile?.image_512 || slackUser?.profile?.image_192 || null,
         teamId,
+        ...(emailToSave && { email: emailToSave }),
       },
     });
   } catch (err) {

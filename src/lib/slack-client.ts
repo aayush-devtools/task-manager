@@ -71,7 +71,7 @@ export async function getUserInfo(userId: string, botToken?: string) {
     },
   });
 
-  const data = (await response.json()) as { ok: boolean; user?: { name?: string; real_name?: string; profile?: { image_512?: string; image_192?: string } }; error?: string };
+  const data = (await response.json()) as { ok: boolean; user?: { name?: string; real_name?: string; profile?: { image_512?: string; image_192?: string; email?: string } }; error?: string };
   if (!data.ok) {
     console.error(`Slack API error (users.info) for user ${userId}: ${data.error}`);
     throw new Error(`Slack API error (users.info): ${data.error}`);
