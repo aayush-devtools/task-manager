@@ -7,58 +7,43 @@ import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-async function getAllTasks(teamId: string | null): Promise<Task[]> {
-  if (!teamId) return [];
-
+async function getAllTasks(teamId: string): Promise<Task[]> {
   const tasks = await prisma.task.findMany({
-    where: {
-      status: "TODO",
-      teamId,
-    },
-    include: { assignee: true },
+    where: { status: "TODO", teamId },
+    include: { assignee: true, creator: true, project: true },
     orderBy: { createdAt: "desc" },
   });
-
   return tasks.map(t => ({
-    id: t.id,
-    title: t.title,
-    description: t.description,
-    status: t.status,
-    priority: t.priority,
-    dueDate: t.dueDate,
-    assigneeName: t.assignee.name,
-    assigneeAvatar: t.assignee.avatarUrl || undefined,
+    id: t.id, title: t.title, description: t.description, url: t.url,
+    status: t.status, priority: t.priority, dueDate: t.dueDate,
+    assigneeId: t.assigneeId, assigneeName: t.assignee.name, assigneeAvatar: t.assignee.avatarUrl || undefined,
+    creatorName: t.creator.name, projectId: t.projectId, projectName: t.project?.name || null,
     slackPermalink: t.slackPermalink || undefined,
   }));
 }
 
 export default async function TeamPage() {
   const session = await getServerSession(authOptions);
-  const primaryTeamId = session?.user?.teamId || null;
-  const tasks = await getAllTasks(primaryTeamId);
-
+  const teamId = session?.user?.teamId;
+  const [tasks, users, projects] = await Promise.all([
+    teamId ? getAllTasks(teamId) : [],
+    teamId ? prisma.user.findMany({ where: { teamId }, select: { id: true, name: true, email: true } }) : [],
+    teamId ? prisma.project.findMany({ where: { teamId }, orderBy: { name: "asc" }, select: { id: true, name: true } }) : [],
+  ]);
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1.5 border-b pb-4">
         <h1 className="text-xl font-bold tracking-tight">Team Board</h1>
         <p className="text-sm text-muted-foreground">All open tasks across the team</p>
       </header>
-
       <div className="flex flex-col">
         {tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-blue-500/40">
-              <Users className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">No tasks right now</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                The whole team is caught up!
-              </p>
-            </div>
+            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-blue-500/40"><Users className="h-6 w-6" /></div>
+            <div><p className="text-sm font-medium text-foreground">No tasks right now</p><p className="mt-1 text-xs text-muted-foreground">The whole team is caught up!</p></div>
           </div>
         ) : (
-          <TaskList initialTasks={tasks} />
+          <TaskList initialTasks={tasks} users={users} projects={projects} />
         )}
       </div>
     </div>

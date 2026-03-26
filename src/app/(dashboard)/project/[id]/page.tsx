@@ -11,23 +11,15 @@ export const dynamic = "force-dynamic";
 
 async function getTasks(projectId: string, teamId: string): Promise<Task[]> {
   const tasks = await prisma.task.findMany({
-    where: {
-      projectId,
-      teamId,
-    },
-    include: { assignee: true },
+    where: { projectId, teamId },
+    include: { assignee: true, creator: true, project: true },
     orderBy: { createdAt: "desc" },
   });
-
   return tasks.map(t => ({
-    id: t.id,
-    title: t.title,
-    description: t.description,
-    status: t.status,
-    priority: t.priority,
-    dueDate: t.dueDate,
-    assigneeName: t.assignee.name,
-    assigneeAvatar: t.assignee.avatarUrl || undefined,
+    id: t.id, title: t.title, description: t.description, url: t.url,
+    status: t.status, priority: t.priority, dueDate: t.dueDate,
+    assigneeId: t.assigneeId, assigneeName: t.assignee.name, assigneeAvatar: t.assignee.avatarUrl || undefined,
+    creatorName: t.creator.name, projectId: t.projectId, projectName: t.project?.name || null,
     slackPermalink: t.slackPermalink || undefined,
   }));
 }
@@ -56,12 +48,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     notFound();
   }
 
-  const projects = await prisma.project.findMany({
-    where: { teamId },
-    orderBy: { name: "asc" },
-  });
-
-  const tasks = await getTasks(id, teamId);
+  const [projects, users, tasks] = await Promise.all([
+    prisma.project.findMany({ where: { teamId }, orderBy: { name: "asc" } }),
+    prisma.user.findMany({ where: { teamId }, select: { id: true, name: true, email: true } }),
+    getTasks(id, teamId),
+  ]);
   const todoTasks = tasks.filter((t) => t.status === "TODO");
   const doneTasks = tasks.filter((t) => t.status === "DONE");
 
@@ -96,7 +87,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           ) : (
-            <TaskList initialTasks={todoTasks} />
+            <TaskList initialTasks={todoTasks} users={users} projects={projects.map(p => ({ id: p.id, name: p.name }))} />
           )}
         </section>
 
@@ -105,7 +96,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Completed <span className="text-muted-foreground text-sm font-normal items-center ml-2 border rounded-full px-2 py-0.5 bg-muted/50">{doneTasks.length}</span></h2>
             </div>
-            <TaskList initialTasks={doneTasks} />
+            <TaskList initialTasks={doneTasks} users={users} projects={projects.map(p => ({ id: p.id, name: p.name }))} />
           </section>
         )}
       </div>

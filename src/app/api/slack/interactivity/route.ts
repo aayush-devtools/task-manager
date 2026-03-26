@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { verifySlackSignature } from "@/lib/slack-verify";
 import { buildTaskModal } from "@/lib/slack-modal";
@@ -199,25 +199,30 @@ export async function POST(req: NextRequest) {
       // Revalidate dashboard
       revalidatePath("/");
 
-      // Fire confirmation asynchronously — don't block the response
+      // Use after() to send confirmation AFTER the response is sent (avoids Vercel function termination)
       const confirmationText = `✅ *Task Created:* "${title}"\n👤 *Assigned to:* ${assignee.name || "someone"}${dueDateStr ? `\n📅 *Due:* ${dueDateStr}` : ""}${projectId ? `\n📁 *Project:* ${values.project_block?.project_select?.selected_option?.text?.text || ""}` : ""}`;
+      const savedResponseUrl = privateMetadata.responseUrl;
+      const savedChannelId = privateMetadata.channelId;
+      const savedBotToken = botToken;
 
-      if (privateMetadata.responseUrl) {
-        respondToUrl(privateMetadata.responseUrl, {
-          text: confirmationText,
-          replace_original: false,
-          response_type: "in_channel",
-        }).catch(err => {
-          console.error("responseUrl failed, trying postMessage:", err);
-          if (privateMetadata.channelId && botToken) {
-            postMessage(privateMetadata.channelId, confirmationText, undefined, botToken)
-              .catch(e => console.error("postMessage fallback failed:", e));
+      after(async () => {
+        if (savedResponseUrl) {
+          try {
+            await respondToUrl(savedResponseUrl, {
+              text: confirmationText,
+              replace_original: false,
+              response_type: "in_channel",
+            });
+          } catch (err) {
+            console.error("responseUrl failed, trying postMessage:", err);
+            if (savedChannelId) {
+              await postMessage(savedChannelId, confirmationText, undefined, savedBotToken).catch(e => console.error("postMessage fallback failed:", e));
+            }
           }
-        });
-      } else if (privateMetadata.channelId) {
-        postMessage(privateMetadata.channelId, confirmationText, undefined, botToken)
-          .catch(e => console.error("postMessage confirmation failed:", e));
-      }
+        } else if (savedChannelId) {
+          await postMessage(savedChannelId, confirmationText, undefined, savedBotToken).catch(e => console.error("postMessage confirmation failed:", e));
+        }
+      });
     } catch (err) {
       console.error("Error processing view_submission:", err);
     }

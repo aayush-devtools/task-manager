@@ -9,30 +9,27 @@ export const dynamic = "force-dynamic";
 
 async function getTasks(userId: string): Promise<Task[]> {
   const tasks = await prisma.task.findMany({
-    where: {
-      status: "TODO",
-      assigneeId: userId,
-    },
-    include: { assignee: true },
+    where: { status: "TODO", assigneeId: userId },
+    include: { assignee: true, creator: true, project: true },
     orderBy: { createdAt: "desc" },
   });
-
   return tasks.map(t => ({
-    id: t.id,
-    title: t.title,
-    description: t.description,
-    status: t.status,
-    priority: t.priority,
-    dueDate: t.dueDate,
-    assigneeName: t.assignee.name,
-    assigneeAvatar: t.assignee.avatarUrl || undefined,
+    id: t.id, title: t.title, description: t.description, url: t.url,
+    status: t.status, priority: t.priority, dueDate: t.dueDate,
+    assigneeId: t.assigneeId, assigneeName: t.assignee.name, assigneeAvatar: t.assignee.avatarUrl || undefined,
+    creatorName: t.creator.name, projectId: t.projectId, projectName: t.project?.name || null,
     slackPermalink: t.slackPermalink || undefined,
   }));
 }
 
 export default async function InboxPage() {
   const session = await getServerSession(authOptions);
-  const tasks = session?.user?.id ? await getTasks(session.user.id) : [];
+  const teamId = session?.user?.teamId;
+  const [tasks, users, projects] = await Promise.all([
+    session?.user?.id ? getTasks(session.user.id) : [],
+    teamId ? prisma.user.findMany({ where: { teamId }, select: { id: true, name: true, email: true } }) : [],
+    teamId ? prisma.project.findMany({ where: { teamId }, orderBy: { name: "asc" }, select: { id: true, name: true } }) : [],
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -40,7 +37,6 @@ export default async function InboxPage() {
         <h1 className="text-xl font-bold tracking-tight">Inbox</h1>
         <p className="text-sm text-muted-foreground">Tasks assigned to you</p>
       </header>
-
       <div className="flex flex-col">
         {tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
@@ -49,13 +45,11 @@ export default async function InboxPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">No tasks in your Inbox</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Everything is clear. Mention your bot or use shortcuts in Slack to create tasks.
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Everything is clear. Mention your bot or use shortcuts in Slack to create tasks.</p>
             </div>
           </div>
         ) : (
-          <TaskList initialTasks={tasks} />
+          <TaskList initialTasks={tasks} users={users} projects={projects} />
         )}
       </div>
     </div>
