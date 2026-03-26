@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { title, assigneeId, dueDate, priority, projectId, url } = await req.json();
+    const { title, assigneeId, dueDate, priority, projectId, url, coAssigneeIds, parentId } = await req.json();
 
     if (!title || !assigneeId) {
       return NextResponse.json({ error: "Title and assignee are required" }, { status: 400 });
@@ -18,7 +18,6 @@ export async function POST(req: Request) {
 
     const teamId = session.user.teamId || null;
 
-    // If a projectId is provided, verify it belongs to the user's workspace
     if (projectId) {
       if (!teamId) {
         return NextResponse.json({ error: "You must be in a workspace to assign tasks to projects" }, { status: 403 });
@@ -40,10 +39,15 @@ export async function POST(req: Request) {
         status: "TODO",
         projectId: projectId || null,
         url: url || null,
+        parentId: parentId || null,
+        coAssignees: coAssigneeIds?.length
+          ? { create: coAssigneeIds.map((uid: string) => ({ userId: uid })) }
+          : undefined,
       },
       include: {
-        assignee: true
-      }
+        assignee: true,
+        coAssignees: { include: { user: true } },
+      },
     });
 
     return NextResponse.json(task, { status: 201 });

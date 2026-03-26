@@ -33,11 +33,11 @@ export function buildTaskModal(
       type: "input",
       block_id: "assignee_block",
       element: {
-        type: "users_select",
+        type: "multi_users_select",
         action_id: "assignee_select",
-        placeholder: { type: "plain_text", text: "Select an assignee" },
+        placeholder: { type: "plain_text", text: "Select assignees" },
       },
-      label: { type: "plain_text", text: "Assignee", emoji: true },
+      label: { type: "plain_text", text: "Assignees", emoji: true },
     },
     {
       type: "input",

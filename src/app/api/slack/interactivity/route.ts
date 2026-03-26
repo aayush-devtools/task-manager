@@ -155,31 +155,34 @@ export async function POST(req: NextRequest) {
 
     const title = values.title_block.title_input.value;
     const description = values.description_block?.description_input?.value || null;
-    const assigneeSlackId = values.assignee_block.assignee_select.selected_user;
+    // multi_users_select returns selected_users (array)
+    const selectedSlackIds: string[] = values.assignee_block.assignee_select.selected_users || [];
     const dueDateStr = values.due_date_block?.due_date_select?.selected_date || null;
     const priority = values.priority_block.priority_select.selected_option?.value || "p4";
     const url = values.url_block?.url_input?.value || null;
     const projectId = values.project_block?.project_select?.selected_option?.value || null;
 
-    if (!assigneeSlackId) {
+    if (!selectedSlackIds.length) {
       return NextResponse.json({
         response_action: "errors",
-        errors: { assignee_block: "Please select an assignee" },
+        errors: { assignee_block: "Please select at least one assignee" },
       });
     }
 
+    const primarySlackId = selectedSlackIds[0];
+    const coSlackIds = selectedSlackIds.slice(1);
+
     try {
-      // Ensure users exist in DB
-      let creator, assignee;
-      if (creatorSlackId === assigneeSlackId) {
-        creator = await upsertUser(creatorSlackId, teamId, botToken);
-        assignee = creator;
-      } else {
-        [creator, assignee] = await Promise.all([
-          upsertUser(creatorSlackId, teamId, botToken),
-          upsertUser(assigneeSlackId, teamId, botToken),
-        ]);
-      }
+      // Upsert all users
+      const allSlackIds = [...new Set([creatorSlackId, primarySlackId, ...coSlackIds])];
+      const upsertedUsers = await Promise.all(
+        allSlackIds.map(sid => upsertUser(sid, teamId, botToken))
+      );
+      const userBySlackId = Object.fromEntries(allSlackIds.map((sid, i) => [sid, upsertedUsers[i]]));
+
+      const creator = userBySlackId[creatorSlackId];
+      const assignee = userBySlackId[primarySlackId];
+      const coAssigneeDbIds = coSlackIds.map(sid => userBySlackId[sid]?.id).filter(Boolean) as string[];
 
       // Save task
       await prisma.task.create({
@@ -195,14 +198,18 @@ export async function POST(req: NextRequest) {
           projectId: projectId || null,
           url: url || null,
           teamId,
+          coAssignees: coAssigneeDbIds.length
+            ? { create: coAssigneeDbIds.map(uid => ({ userId: uid })) }
+            : undefined,
         },
       });
 
       // Revalidate dashboard
       revalidatePath("/");
 
+      const assigneeNames = [assignee, ...coSlackIds.map(sid => userBySlackId[sid])].map(u => u?.name).filter(Boolean).join(", ");
       // Use after() to send confirmation AFTER the response is sent (avoids Vercel function termination)
-      const confirmationText = `✅ *Task Created:* "${title}"\n👤 *Assigned to:* ${assignee.name || "someone"}${dueDateStr ? `\n📅 *Due:* ${dueDateStr}` : ""}${projectId ? `\n📁 *Project:* ${values.project_block?.project_select?.selected_option?.text?.text || ""}` : ""}`;
+      const confirmationText = `✅ *Task Created:* "${title}"\n👤 *Assigned to:* ${assigneeNames}${dueDateStr ? `\n📅 *Due:* ${dueDateStr}` : ""}${projectId ? `\n📁 *Project:* ${values.project_block?.project_select?.selected_option?.text?.text || ""}` : ""}`;
       const savedResponseUrl = privateMetadata.responseUrl;
       const savedChannelId = privateMetadata.channelId;
       const savedBotToken = botToken;

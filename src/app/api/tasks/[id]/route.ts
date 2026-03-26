@@ -3,15 +3,23 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 
+const taskInclude = {
+  assignee: true,
+  creator: true,
+  project: true,
+  coAssignees: { include: { user: true } },
+  subtasks: {
+    include: { assignee: true, coAssignees: { include: { user: true } } },
+    orderBy: { createdAt: "asc" as const },
+  },
+};
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const task = await prisma.task.findUnique({
-    where: { id },
-    include: { assignee: true, creator: true, project: true },
-  });
+  const task = await prisma.task.findUnique({ where: { id }, include: taskInclude });
 
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -41,7 +49,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { status, title, description, url, priority, dueDate, assigneeId, projectId } = body;
+    const { status, title, description, url, priority, dueDate, assigneeId, projectId, coAssigneeIds } = body;
+
+    if (coAssigneeIds !== undefined) {
+      await prisma.taskAssignee.deleteMany({ where: { taskId: id } });
+      if (coAssigneeIds.length > 0) {
+        await prisma.taskAssignee.createMany({
+          data: coAssigneeIds.map((uid: string) => ({ taskId: id, userId: uid })),
+          skipDuplicates: true,
+        });
+      }
+    }
 
     const updated = await prisma.task.update({
       where: { id },
@@ -55,7 +73,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         ...(assigneeId !== undefined && { assigneeId }),
         ...(projectId !== undefined && { projectId: projectId || null }),
       },
-      include: { assignee: true, project: true },
+      include: taskInclude,
     });
 
     return NextResponse.json(updated);

@@ -9,14 +9,15 @@ export const dynamic = "force-dynamic";
 
 async function getAllTasks(teamId: string): Promise<Task[]> {
   const tasks = await prisma.task.findMany({
-    where: { status: "TODO", teamId },
-    include: { assignee: true, creator: true, project: true },
+    where: { status: "TODO", teamId, parentId: null },
+    include: { assignee: true, creator: true, project: true, coAssignees: { include: { user: true } } },
     orderBy: { createdAt: "desc" },
   });
   return tasks.map(t => ({
     id: t.id, title: t.title, description: t.description, url: t.url,
     status: t.status, priority: t.priority, dueDate: t.dueDate,
     assigneeId: t.assigneeId, assigneeName: t.assignee.name, assigneeAvatar: t.assignee.avatarUrl || undefined,
+    coAssignees: t.coAssignees.map(ca => ({ id: ca.user.id, name: ca.user.name, avatarUrl: ca.user.avatarUrl || undefined })),
     creatorName: t.creator.name, projectId: t.projectId, projectName: t.project?.name || null,
     slackPermalink: t.slackPermalink || undefined,
   }));

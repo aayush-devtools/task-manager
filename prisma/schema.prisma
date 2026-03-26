@@ -12,16 +12,17 @@ datasource db {
 }
 
 model User {
-  id            String          @id @default(cuid())
-  slackId       String?         @unique
-  email         String?         @unique
-  teamId        String?
-  password      String?
-  name          String
-  avatarUrl     String?
-  tasksAssigned Task[]          @relation("AssignedTasks")
-  tasksCreated  Task[]          @relation("CreatedTasks")
-  workspaces    UserWorkspace[]
+  id                String          @id @default(cuid())
+  slackId           String?         @unique
+  email             String?         @unique
+  teamId            String?
+  password          String?
+  name              String
+  avatarUrl         String?
+  tasksAssigned     Task[]          @relation("AssignedTasks")
+  tasksCreated      Task[]          @relation("CreatedTasks")
+  workspaces        UserWorkspace[]
+  taskCoAssignments TaskAssignee[]
 }
 
 model UserWorkspace {
@@ -41,6 +42,16 @@ model Project {
   tasks          Task[]
 }
 
+model TaskAssignee {
+  id     String @id @default(cuid())
+  taskId String
+  userId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+}
+
 model Task {
   id          String    @id @default(cuid())
   title       String
@@ -58,6 +69,14 @@ model Task {
   creator    User     @relation("CreatedTasks", fields: [creatorId], references: [id])
   projectId  String?
   project    Project? @relation(fields: [projectId], references: [id])
+
+  // Co-assignees (additional assignees beyond the primary)
+  coAssignees TaskAssignee[]
+
+  // Subtasks (self-referential)
+  parentId String?
+  parent   Task?   @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks Task[]  @relation("Subtasks")
 
   // Slack Context
   slackChannelId String?
