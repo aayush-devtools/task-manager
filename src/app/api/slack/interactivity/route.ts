@@ -158,6 +158,7 @@ export async function POST(req: NextRequest) {
     const assigneeSlackId = values.assignee_block.assignee_select.selected_user;
     const dueDateStr = values.due_date_block?.due_date_select?.selected_date || null;
     const priority = values.priority_block.priority_select.selected_option?.value || "p4";
+    const url = values.url_block?.url_input?.value || null;
     const projectId = values.project_block?.project_select?.selected_option?.value || null;
 
     if (!assigneeSlackId) {
@@ -192,6 +193,7 @@ export async function POST(req: NextRequest) {
           creatorId: creator.id,
           slackPermalink: privateMetadata.slackLink || null,
           projectId: projectId || null,
+          url: url || null,
           teamId,
         },
       });

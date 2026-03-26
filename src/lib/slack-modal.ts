@@ -66,9 +66,19 @@ export function buildTaskModal(
       },
       label: { type: "plain_text", text: "Priority", emoji: true },
     },
+    {
+      type: "input",
+      block_id: "url_block",
+      optional: true,
+      element: {
+        type: "url_text_input",
+        action_id: "url_input",
+        placeholder: { type: "plain_text", text: "https://..." },
+      },
+      label: { type: "plain_text", text: "URL (optional)", emoji: true },
+    },
   ];
 
-  // Add project selector if there are projects for this workspace
   if (projects && projects.length > 0) {
     blocks.push({
       type: "input",

@@ -56,12 +56,13 @@ export function CreateTaskModal({ projects = [], defaultProjectId }: CreateTaskM
     const dueDate = dueDateStr ? new Date(dueDateStr).toISOString() : null;
     const projectIdRaw = formData.get("projectId") as string;
     const projectId = projectIdRaw && projectIdRaw !== "none" ? projectIdRaw : null;
+    const url = (formData.get("url") as string) || null;
 
     try {
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, assigneeId, priority, dueDate, projectId }),
+        body: JSON.stringify({ title, assigneeId, priority, dueDate, projectId, url }),
       });
 
       if (!res.ok) throw new Error("Failed to create task");
@@ -153,6 +154,11 @@ export function CreateTaskModal({ projects = [], defaultProjectId }: CreateTaskM
                 <Label htmlFor="dueDate">Due Date (Optional)</Label>
                 <Input id="dueDate" name="dueDate" type="date" />
               </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="url">URL (optional)</Label>
+              <Input id="url" name="url" type="url" placeholder="https://..." />
             </div>
           </div>
           <DialogFooter>

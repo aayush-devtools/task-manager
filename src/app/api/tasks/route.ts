@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { title, assigneeId, dueDate, priority, projectId } = await req.json();
+    const { title, assigneeId, dueDate, priority, projectId, url } = await req.json();
 
     if (!title || !assigneeId) {
       return NextResponse.json({ error: "Title and assignee are required" }, { status: 400 });
@@ -39,6 +39,7 @@ export async function POST(req: Request) {
         teamId,
         status: "TODO",
         projectId: projectId || null,
+        url: url || null,
       },
       include: {
         assignee: true
