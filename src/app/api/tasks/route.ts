@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     const recipients = [
       { user: task.assignee },
       ...task.coAssignees.map(ca => ({ user: ca.user })),
-    ].filter(r => r.user.email && r.user.id !== task.creatorId);
+    ].filter(r => !!r.user.email);
 
     Promise.all(
       recipients.map(r =>
